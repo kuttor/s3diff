@@ -3,15 +3,12 @@
 s3diff - utility for determining differences between buckets.
 
 Usage:
-  s3diff.py --bucket <bucket> [--prefix <prefix>]
-  s3diff.py -h | --help
-  s3diff.py --version
+  s3diff.py <left-bucket> <right-bucket>
+  s3diff.py [ -h | --help | --version ]
 
 Options:
   --version             Show version.
   -h --help             Show this screen.
-  -b --bucket BUCKET    Set target bucket.
-  -p --prefix PREFIX    set target prefix.
 """
 from boto3 import client
 from docopt import docopt, DocoptExit
@@ -23,32 +20,46 @@ __version__ = "1.0.0"
 __maintainer__ = "Andrew Kuttor"
 __status__ = "Development"
 
+
 def main():
     try:
         arguments = docopt(__doc__, version='s3diff 1.0')
-        keys(arguments)
+        left = keys(splitter(arguments['<left-bucket>']))
+        right = keys(splitter(arguments['<right-bucket>']))
 
     # invalid argument handler
     except DocoptExit as exit:
         print exit.message
 
 
-# no max_key limit key listing
+# splits bucket and the first / to seperate prefix
+def splitter(bucket):
+    divorced = bucket.split('/', 1)
+    params = {'Bucket': divorced[0]}
+    if len(divorced) == 2:
+        params = {"Bucket": divorced[0], "Prefix": divorced[1]}
+    return params
+
+
+# creates list of object etags recursively starting at bucket/prefix
 def keys(args):
-
-    # setup param logic
-    params = {'Bucket': args['--bucket'], 'Prefix': args['--prefix']}
-    if not args['--prefix']: del params['Prefix']
-
-    # paginator setup
     paginator = client('s3').get_paginator('list_objects')
-    pages = paginator.paginate(**params)
+    pages = paginator.paginate(**args)
 
+    print "\nGenerating list of all e-tags for:", args['Bucket']
+    etag_list = []
     # list all keys per iterated page
     for page in pages:
-        for keys in page['Contents']:
-            print keys['Key']
+        for key in page['Contents']:
+            etag_list.append(key['ETag'])
 
+    return etag_list
 
 if __name__ == "__main__":
     main()
+
+# source: installation and usage manual
+# url: https://pythonhosted.org/joblib
+
+# source: aws guide for pagination
+# url: http://boto3.readthedocs.io/en/latest/guide/paginators.html
